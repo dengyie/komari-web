@@ -110,6 +110,7 @@ function HashrateSparkline({
   const chartRows = useMemo(() => {
     if (!points || points.length === 0) return [];
     return points
+      .filter((p) => p && p.time && !isNaN(new Date(p.time).getTime()))
       .map((p) => {
         const timeNum = new Date(p.time).getTime();
         const val = p.value != null && isFinite(p.value) ? Math.max(0, p.value) : 0;
@@ -194,7 +195,7 @@ function HashrateSparkline({
         ? "var(--accent-9)"
         : "var(--gray-8)";
 
-  const gradientId = `hashrate-spark-${uuid.slice(0, 8)}`;
+  const gradientId = `hashrate-spark-${uuid.replace(/[^a-zA-Z0-9_-]/g, "")}`;
 
   return (
     <Popover.Root>
@@ -203,6 +204,7 @@ function HashrateSparkline({
           type="button"
           className="flex items-center gap-1.5 px-1.5 py-0.5 rounded-md hover:bg-[var(--gray-3)] transition-colors cursor-pointer text-left group"
           title={t("admin.mining.clickToExpand", "点击查看 24 小时详细趋势")}
+          aria-label={t("admin.mining.clickToExpand", "点击查看 24 小时详细趋势")}
         >
           {sparklineData ? (
             <svg
