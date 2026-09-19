@@ -45,6 +45,35 @@
     "upload_success": "上传成功"
   },
   "admin": {
+    "mining": {
+      "activeCount": "{{count}} 台在挖",
+      "algorithm": "算法",
+      "control": "管控",
+      "dispatchFailed": "下发失败（节点不在线或 agent 不支持）",
+      "failed": "执行失败",
+      "hashrate": "算力 (1min)",
+      "hint": "对节点执行中心端启停需要该节点 agent 配置 AGENT_MINER_CONTROL_CMD 模板（含 {action} 占位符）；结果由任务通道回传，约需数秒。",
+      "node": "节点",
+      "noNodes": "暂无可用节点",
+      "notConfigured": "未配置挖矿",
+      "offline": "离线",
+      "online": "在线",
+      "peakHashrate": "最高算力",
+      "avgHashrate": "平均算力",
+      "chart24h": "24 小时算力历史",
+      "clickToExpand": "点击查看 24 小时详细趋势",
+      "noChartData": "暂无历史算力记录",
+      "pollTimeout": "查询执行结果超时，请稍后在任务结果中查看",
+      "start": "启动",
+      "starting": "启动中...",
+      "state": "状态",
+      "stop": "暂停",
+      "stopping": "暂停中...",
+      "subtitle": "集中监控集群节点算力与算法状态，通过任务链路远程下发矿机启停指令",
+      "success": "指令已执行",
+      "title": "挖矿管理",
+      "trend": "算力趋势 (24h)"
+    },
     "nodeDetail": {
       "arch": "架构",
       "clientVersion": "客户端版本",
@@ -159,26 +188,6 @@
       "login_description": "当有新的会话登录到Komari时，向您发送通知",
       "traffic": "流量用量",
       "traffic_description": "Komari将会在服务器到达指定的流量使用百分比时发送通知，并以5%为梯度持续提醒。如果服务器没有设置流量阈值，不发送通知。设置为0禁用流量提醒。"
-    },
-    "mining": {
-      "activeCount": "{{count}} 台在挖",
-      "algorithm": "算法",
-      "control": "管控",
-      "dispatchFailed": "下发失败（节点不在线或 agent 不支持）",
-      "failed": "执行失败",
-      "hashrate": "算力 (1min)",
-      "hint": "对节点执行中心端启停需要该节点 agent 配置 AGENT_MINER_CONTROL_CMD 模板（含 {action} 占位符）；结果由任务通道回传，约需数秒。",
-      "node": "节点",
-      "offline": "离线",
-      "online": "在线",
-      "pollTimeout": "查询执行结果超时，请稍后在任务结果中查看",
-      "start": "启动",
-      "starting": "启动中...",
-      "state": "状态",
-      "stop": "暂停",
-      "stopping": "暂停中...",
-      "success": "指令已执行",
-      "title": "挖矿管理"
     }
   },
   "chart": {

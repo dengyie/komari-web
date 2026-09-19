@@ -169,16 +169,25 @@
       "hashrate": "Hashrate (1min)",
       "hint": "Remote start/stop requires the node agent to set AGENT_MINER_CONTROL_CMD (with an {action} placeholder); results are returned via the task channel within seconds.",
       "node": "Node",
+      "noNodes": "No nodes available",
+      "notConfigured": "Not Configured",
       "offline": "Offline",
       "online": "Online",
+      "peakHashrate": "Peak Hashrate",
+      "avgHashrate": "Avg Hashrate",
+      "chart24h": "24h Hashrate History",
+      "clickToExpand": "Click to view detailed 24h trend",
+      "noChartData": "No historical hashrate records",
       "pollTimeout": "Timed out polling the task result; check task results later",
       "start": "Start",
       "starting": "Starting...",
       "state": "State",
       "stop": "Pause",
       "stopping": "Pausing...",
+      "subtitle": "Monitor node hashrates and algorithms, remotely dispatch start/pause commands",
       "success": "Command executed",
-      "title": "Mining Management"
+      "title": "Mining Management",
+      "trend": "Hashrate Trend (24h)"
     }
   },
   "chart": {
