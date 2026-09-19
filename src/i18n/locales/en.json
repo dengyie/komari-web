@@ -159,6 +159,26 @@
       "login_description": "Send a notification when a new session logs into Komari.",
       "traffic": "Traffic Usage",
       "traffic_description": "Komari will send notifications when the server reaches the specified percentage of traffic usage, with reminders at 5% increments. If no traffic threshold is set, no notifications will be sent. Set to 0 to disable traffic reminders."
+    },
+    "mining": {
+      "activeCount": "{{count}} mining",
+      "algorithm": "Algorithm",
+      "control": "Control",
+      "dispatchFailed": "Dispatch failed (node offline or agent unsupported)",
+      "failed": "Execution failed",
+      "hashrate": "Hashrate (1min)",
+      "hint": "Remote start/stop requires the node agent to set AGENT_MINER_CONTROL_CMD (with an {action} placeholder); results are returned via the task channel within seconds.",
+      "node": "Node",
+      "offline": "Offline",
+      "online": "Online",
+      "pollTimeout": "Timed out polling the task result; check task results later",
+      "start": "Start",
+      "starting": "Starting...",
+      "state": "State",
+      "stop": "Pause",
+      "stopping": "Pausing...",
+      "success": "Command executed",
+      "title": "Mining Management"
     }
   },
   "chart": {

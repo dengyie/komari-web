@@ -17,6 +17,11 @@
       "newTab": true
     },
     {
+      "labelKey": "admin.mining.title",
+      "path": "/admin/mining",
+      "icon": "Pickaxe"
+    },
+    {
       "labelKey": "operations.title",
       "path": "/admin/ping",
       "icon": "Bolt",

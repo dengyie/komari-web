@@ -159,6 +159,26 @@
       "login_description": "當有新的會話登入到Komari時，向您傳送通知",
       "traffic": "流量用量",
       "traffic_description": "Komari將會在伺服器到達指定的流量使用百分比時傳送通知，並以5%為梯度持續提醒。如果伺服器沒有設定流量閾值，不傳送通知。設定為0停用流量提醒。"
+    },
+    "mining": {
+      "activeCount": "{{count}} 台在挖",
+      "algorithm": "算法",
+      "control": "管控",
+      "dispatchFailed": "下發失敗（節點離線或 agent 不支援）",
+      "failed": "執行失敗",
+      "hashrate": "算力 (1min)",
+      "hint": "對節點執行中心端啟停需要該節點 agent 配置 AGENT_MINER_CONTROL_CMD 模板（含 {action} 佔位符）；結果由任務通道回傳，約需數秒。",
+      "node": "節點",
+      "offline": "離線",
+      "online": "線上",
+      "pollTimeout": "查詢執行結果逾時，請稍後在任務結果中查看",
+      "start": "啟動",
+      "starting": "啟動中...",
+      "state": "狀態",
+      "stop": "暫停",
+      "stopping": "暫停中...",
+      "success": "指令已執行",
+      "title": "挖礦管理"
     }
   },
   "chart": {
