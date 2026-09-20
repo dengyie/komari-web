@@ -31,6 +31,12 @@ import {
 } from "@/components/ui/table";
 import { ChartContainer, ChartTooltip, type ChartConfig } from "@/components/ui/chart";
 import { cn } from "@/lib/utils";
+import { formatHashrate } from "@/utils/miningHelper";
+import {
+  interpretMiningControlResp,
+  pollMiningTaskResult,
+  type MiningControlResp,
+} from "@/utils/miningControl";
 
 type MiningLive = { algorithm?: string; hashrate_1min?: number };
 type LatestStatus = Record<
@@ -54,35 +60,12 @@ type QueryMetricsResponse = {
   series?: MetricSeries[];
 };
 
-type MiningControlResp = {
-  task_id: string;
-  sent_clients?: string[];
-  failed_clients?: string[];
-};
-
-type TaskResult = { client: string; result: string; exit_code: number };
-
 const STATUS_POLL_MS = 4000;
 const METRICS_POLL_MS = 30000;
-const RESULT_POLL_MS = 2000;
-const RESULT_POLL_MAX = 15; // ~30s, 覆盖 supervisord startsecs + 看门狗拉起路径
-
-function formatHashrate(hs: number | null | undefined): string {
-  if (hs == null || !isFinite(hs) || hs <= 0) return "0 H/s";
-  const units = ["H/s", "kH/s", "MH/s", "GH/s", "TH/s", "PH/s"];
-  let value = hs;
-  let unit = 0;
-  while (value >= 1000 && unit < units.length - 1) {
-    value /= 1000;
-    unit++;
-  }
-  const digits = value >= 100 ? 0 : value >= 10 ? 1 : 2;
-  return `${value.toFixed(digits)} ${units[unit]}`;
-}
 
 type RowState = {
   busy: "start" | "stop" | null;
-  status: "success" | "failed" | null;
+  status: "success" | "failed" | "queued" | null;
   message: string;
 };
 
@@ -356,6 +339,10 @@ export default function Mining() {
   const [historyMetrics, setHistoryMetrics] = useState<Record<string, MetricPoint[]>>({});
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const aliveRef = useRef(true);
+  const minerIdsRef = useRef<string[]>([]);
+  const latestRef = useRef<LatestStatus>({});
+  const historyMetricsRef = useRef<Record<string, MetricPoint[]>>({});
+  const historyUnscopedRef = useRef(true);
 
   useEffect(() => {
     aliveRef.current = true;
@@ -364,6 +351,31 @@ export default function Mining() {
     };
   }, []);
 
+  const failRow = useCallback((uuid: string, message: string) => {
+    if (!aliveRef.current) return;
+    setRows((p) => ({
+      ...p,
+      [uuid]: { busy: null, status: "failed", message },
+    }));
+  }, []);
+
+  const resolveMinerEntityIds = useCallback((status: LatestStatus) => {
+    const nodes = nodeList ?? [];
+    const history = historyMetricsRef.current;
+    return nodes
+      .filter((info) => {
+        const st = status[info.uuid];
+        const tags = info.tags?.toLowerCase() ?? "";
+        return (
+          st?.mining != null ||
+          (history[info.uuid]?.length ?? 0) > 0 ||
+          tags.includes("miner") ||
+          tags.includes("mining")
+        );
+      })
+      .map((info) => info.uuid);
+  }, [nodeList]);
+
   // 轮询节点实时算力状态（4s）
   const loadStatus = useCallback(async () => {
     try {
@@ -371,27 +383,31 @@ export default function Mining() {
         "common:getNodesLatestStatus",
         {},
       );
-      if (aliveRef.current) setLatest(resp ?? {});
+      if (!aliveRef.current) return;
+      const next = resp ?? {};
+      latestRef.current = next;
+      minerIdsRef.current = resolveMinerEntityIds(next);
+      setLatest(next);
     } catch {
       // 4s 轮询，失败等下一轮
     }
-  }, [call]);
+  }, [call, resolveMinerEntityIds]);
 
-  useEffect(() => {
-    loadStatus();
-    const timer = setInterval(loadStatus, STATUS_POLL_MS);
-    return () => clearInterval(timer);
-  }, [loadStatus]);
-
-  // 批量拉取 24 小时历史算力曲线（30s）
+  // 批量拉取 24 小时历史算力曲线（30s）；已知矿机后按 entity_ids 收窄扫描范围
   const loadHistoryMetrics = useCallback(async () => {
     try {
-      const resp = await call<any, QueryMetricsResponse>("public:queryMetrics", {
+      const entityIds = minerIdsRef.current;
+      const params: Record<string, unknown> = {
         metric_keys: ["mining.hashrate"],
         hours: 24,
         max_points: 60,
         aggregation: "avg",
-      });
+      };
+      // 首次全量扫描以发现「仅有历史算力」的矿机，之后按已知矿机收窄。
+      if (!historyUnscopedRef.current && entityIds.length > 0) {
+        params.entity_ids = entityIds;
+      }
+      const resp = await call<any, QueryMetricsResponse>("public:queryMetrics", params);
       if (!aliveRef.current) return;
       const map: Record<string, MetricPoint[]> = {};
       for (const s of resp?.series ?? []) {
@@ -399,68 +415,116 @@ export default function Mining() {
           map[s.entity_id] = s.points;
         }
       }
+      historyMetricsRef.current = map;
+      historyUnscopedRef.current = false;
+      minerIdsRef.current = resolveMinerEntityIds(latestRef.current);
       setHistoryMetrics(map);
     } catch (e) {
       console.warn("[mining] queryMetrics failed:", e);
     }
-  }, [call]);
+  }, [call, resolveMinerEntityIds]);
 
   useEffect(() => {
-    loadHistoryMetrics();
-    const timer = setInterval(loadHistoryMetrics, METRICS_POLL_MS);
-    return () => clearInterval(timer);
-  }, [loadHistoryMetrics]);
+    let statusTimer: number | undefined;
+    let metricsTimer: number | undefined;
+    let stopped = false;
+    let statusRunning = false;
+    let metricsRunning = false;
 
-  // 轮询任务执行结果
-  const pollTaskResult = useCallback(
-    async (uuid: string, taskId: string) => {
-      for (let i = 0; i < RESULT_POLL_MAX; i++) {
-        await new Promise((r) => setTimeout(r, RESULT_POLL_MS));
-        if (!aliveRef.current) return;
-        try {
-          const results = await call<any, TaskResult[]>(
-            "admin:getTaskResultsByTaskId",
-            { task_id: taskId },
-          );
-          const mine = (results ?? []).find((r) => r?.client === uuid);
-          if (mine) {
-            if (!aliveRef.current) return;
-            setRows((p) => ({
-              ...p,
-              [uuid]: {
-                busy: null,
-                status: mine.exit_code === 0 ? "success" : "failed",
-                message: (mine.result ?? "")
-                  .replace(/\0/g, "")
-                  .trim()
-                  .slice(0, 200),
-              },
-            }));
-            // 操作成功后立即刷新一轮时序数据
-            loadHistoryMetrics();
-            return;
-          }
-        } catch {
-          // 任务尚未写入结果或返回 NotFound 时继续重试
+    const clearTimers = () => {
+      if (statusTimer !== undefined) {
+        window.clearTimeout(statusTimer);
+        statusTimer = undefined;
+      }
+      if (metricsTimer !== undefined) {
+        window.clearTimeout(metricsTimer);
+        metricsTimer = undefined;
+      }
+    };
+
+    const tickStatus = async () => {
+      if (stopped || statusRunning || document.hidden) return;
+      statusRunning = true;
+      try {
+        await loadStatus();
+      } finally {
+        statusRunning = false;
+        if (!stopped && !document.hidden) {
+          statusTimer = window.setTimeout(tickStatus, STATUS_POLL_MS);
         }
       }
-      if (!aliveRef.current) return;
-      setRows((p) => ({
-        ...p,
-        [uuid]: {
-          busy: null,
-          status: "failed",
-          message: t(
-            "admin.mining.pollTimeout",
-            "查询执行结果超时，请稍后在任务结果中查看",
-          ),
-        },
-      }));
+    };
+
+    const tickMetrics = async () => {
+      if (stopped || metricsRunning || document.hidden) return;
+      metricsRunning = true;
+      try {
+        await loadHistoryMetrics();
+      } finally {
+        metricsRunning = false;
+        if (!stopped && !document.hidden) {
+          metricsTimer = window.setTimeout(tickMetrics, METRICS_POLL_MS);
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        clearTimers();
+        return;
+      }
+      if (!statusRunning) void tickStatus();
+      if (!metricsRunning) void tickMetrics();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (!document.hidden) {
+      void tickStatus();
+      void tickMetrics();
+    }
+
+    return () => {
+      stopped = true;
+      clearTimers();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [loadStatus, loadHistoryMetrics]);
+
+  const applyPollOutcome = useCallback(
+    async (uuid: string, taskId: string) => {
+      try {
+        const outcome = await pollMiningTaskResult(call, uuid, taskId, {
+          isAlive: () => aliveRef.current,
+        });
+        if (!aliveRef.current) return;
+        if (outcome.kind === "result") {
+          setRows((p) => ({
+            ...p,
+            [uuid]: {
+              busy: null,
+              status: outcome.exitCode === 0 ? "success" : "failed",
+              message: outcome.message,
+            },
+          }));
+          if (outcome.exitCode === 0) void loadHistoryMetrics();
+          return;
+        }
+        failRow(
+          uuid,
+          t("admin.mining.pollTimeout", "节点未在 30s 内回传执行结果"),
+        );
+      } catch (e) {
+        console.warn("[mining] poll task result failed:", e);
+        failRow(
+          uuid,
+          t("admin.mining.dispatchFailed", "下发失败（节点不在线或 agent 不支持）"),
+        );
+      }
     },
-    [call, loadHistoryMetrics, t],
+    [call, failRow, loadHistoryMetrics, t],
   );
 
-  // 下发启停管控
+  // 下发启停管控：先解释 RPC 分区结果，再决定立刻失败 / 排队提示 / 轮询任务结果
   const dispatch = useCallback(
     async (uuid: string, action: "start" | "stop") => {
       setRows((p) => ({
@@ -472,25 +536,45 @@ export default function Mining() {
           clients: [uuid],
           action,
         });
-        if (!resp?.task_id) throw new Error("no task id");
-        await pollTaskResult(uuid, resp.task_id);
-      } catch (e) {
-        console.warn("[mining] dispatch failed:", e);
-        if (!aliveRef.current) return;
-        setRows((p) => ({
-          ...p,
-          [uuid]: {
-            busy: null,
-            status: "failed",
-            message: t(
+        const outcome = interpretMiningControlResp(resp, uuid);
+        if (outcome.kind === "failed") {
+          failRow(
+            uuid,
+            t(
               "admin.mining.dispatchFailed",
               "下发失败（节点不在线或 agent 不支持）",
             ),
-          },
-        }));
+          );
+          return;
+        }
+        if (outcome.kind === "queued") {
+          if (!aliveRef.current) return;
+          setRows((p) => ({
+            ...p,
+            [uuid]: {
+              busy: null,
+              status: "queued",
+              message: t(
+                "admin.mining.queued",
+                "指令已排队，节点重连后执行",
+              ),
+            },
+          }));
+          return;
+        }
+        await applyPollOutcome(uuid, outcome.taskId);
+      } catch (e) {
+        console.warn("[mining] dispatch failed:", e);
+        failRow(
+          uuid,
+          t(
+            "admin.mining.dispatchFailed",
+            "下发失败（节点不在线或 agent 不支持）",
+          ),
+        );
       }
     },
-    [call, pollTaskResult, t],
+    [applyPollOutcome, call, failRow, t],
   );
 
   if (nodeList === null || (isLoading && nodeList.length === 0)) {
@@ -526,20 +610,9 @@ export default function Mining() {
     };
   });
 
-  // 排序规则：
-  // 1. 挖矿节点排在未配置节点前面
-  // 2. 挖矿节点中：在线且在挖（算力 > 0）最前，其次是在线空闲，再次是离线矿机
-  // 3. 未配置节点：在线在前，离线在后
-  // 4. 同级按节点名称字母升序
+  // 排序规则：挖矿节点 → 在线 → 名称。不按瞬时算力分桶，避免 4s 轮询抖动。
   miners.sort((a, b) => {
     if (a.isMiner !== b.isMiner) return a.isMiner ? -1 : 1;
-
-    if (a.isMiner && b.isMiner) {
-      const aMining = a.online && Number(a.mining?.hashrate_1min ?? 0) > 0 ? 1 : 0;
-      const bMining = b.online && Number(b.mining?.hashrate_1min ?? 0) > 0 ? 1 : 0;
-      if (aMining !== bMining) return bMining - aMining;
-    }
-
     if (a.online !== b.online) return a.online ? -1 : 1;
     return (a.info.name || "").localeCompare(b.info.name || "");
   });
@@ -738,6 +811,17 @@ export default function Mining() {
                             >
                               {t("admin.mining.success", "指令已执行")}
                               {row.message ? `: ${row.message}` : ""}
+                            </Text>
+                          )}
+                          {row.status === "queued" && (
+                            <Text
+                              size="1"
+                              color="amber"
+                              className="max-w-[320px] truncate"
+                              title={row.message}
+                            >
+                              {row.message ||
+                                t("admin.mining.queued", "指令已排队，节点重连后执行")}
                             </Text>
                           )}
                           {row.status === "failed" && (
