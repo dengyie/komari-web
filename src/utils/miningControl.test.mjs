@@ -38,6 +38,11 @@ function sanitizeMiningTaskMessage(raw) {
   return (raw ?? "").replace(/\0/g, "").trim().slice(0, 200);
 }
 
+function isFinishedMiningTaskResult(row) {
+  if (!row) return false;
+  return row.exit_code != null || Boolean(row.finished_at);
+}
+
 async function pollMiningTaskResult(call, uuid, taskId, options = {}) {
   const intervalMs = options.intervalMs ?? 2000;
   const maxAttempts = options.maxAttempts ?? 15;
@@ -50,7 +55,7 @@ async function pollMiningTaskResult(call, uuid, taskId, options = {}) {
     try {
       const results = await call("admin:getTaskResultsByTaskId", { task_id: taskId });
       const mine = (results ?? []).find((r) => r?.client === uuid);
-      if (mine) {
+      if (isFinishedMiningTaskResult(mine)) {
         return {
           kind: "result",
           exitCode: Number(mine.exit_code ?? -1),
@@ -67,6 +72,7 @@ async function pollMiningTaskResult(call, uuid, taskId, options = {}) {
 test("source keeps mining control contract helpers in sync", () => {
   assert.ok(source.includes("export function interpretMiningControlResp"), "interpret helper missing");
   assert.ok(source.includes("export async function pollMiningTaskResult"), "poll helper missing");
+  assert.ok(source.includes("export function isFinishedMiningTaskResult"), "placeholder-row helper missing");
   assert.ok(source.includes("if (i > 0) await sleep(intervalMs)"), "first poll must not sleep");
   assert.ok(source.includes("JSONRPC_NOT_FOUND = -32044"), "NotFound code drifted");
   assert.ok(miningPage.includes('from "@/utils/miningControl"'), "mining page must import helper");
@@ -121,6 +127,34 @@ test("pollMiningTaskResult queries immediately then retries NotFound until resul
   assert.equal(calls, 2);
   assert.deepEqual(sleeps, [5]);
   assert.deepEqual(outcome, { kind: "result", exitCode: 0, message: "ok" });
+});
+
+test("pollMiningTaskResult ignores unfinished CreateTask placeholder rows", async () => {
+  let calls = 0;
+  const outcome = await pollMiningTaskResult(
+    async () => {
+      calls += 1;
+      if (calls === 1) {
+        return [{ client: "a", result: "", exit_code: null, finished_at: null }];
+      }
+      return [{ client: "a", result: "started", exit_code: 0, finished_at: "2026-09-21T00:54:09Z" }];
+    },
+    "a",
+    "task-1",
+    { maxAttempts: 3, intervalMs: 1, sleep: async () => {} },
+  );
+  assert.equal(calls, 2);
+  assert.deepEqual(outcome, { kind: "result", exitCode: 0, message: "started" });
+});
+
+test("pollMiningTaskResult times out if only placeholder rows appear", async () => {
+  const outcome = await pollMiningTaskResult(
+    async () => [{ client: "a", result: "", exit_code: null, finished_at: null }],
+    "a",
+    "task-1",
+    { maxAttempts: 2, intervalMs: 1, sleep: async () => {} },
+  );
+  assert.deepEqual(outcome, { kind: "timeout" });
 });
 
 test("isJsonRpcNotFound ignores real RPC failures", () => {

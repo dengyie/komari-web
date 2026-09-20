@@ -21,7 +21,8 @@ export type MiningControlResp = {
 export type MiningTaskResult = {
   client?: string;
   result?: string;
-  exit_code?: number;
+  exit_code?: number | null;
+  finished_at?: string | null;
 };
 
 export type MiningControlOutcome =
@@ -69,6 +70,14 @@ export function sanitizeMiningTaskMessage(raw: string | null | undefined): strin
   return (raw ?? "").replace(/\0/g, "").trim().slice(0, 200);
 }
 
+/** CreateTask 会先插占位行（exit_code/finished_at 均为 null）；必须等真正回传才算完成。 */
+export function isFinishedMiningTaskResult(
+  row: MiningTaskResult | undefined | null,
+): boolean {
+  if (!row) return false;
+  return row.exit_code != null || Boolean(row.finished_at);
+}
+
 export async function pollMiningTaskResult(
   call: MiningTaskRpcCall,
   uuid: string,
@@ -91,11 +100,11 @@ export async function pollMiningTaskResult(
     try {
       const results = await call("admin:getTaskResultsByTaskId", { task_id: taskId });
       const mine = (results ?? []).find((r) => r?.client === uuid);
-      if (mine) {
+      if (isFinishedMiningTaskResult(mine)) {
         return {
           kind: "result",
-          exitCode: Number(mine.exit_code ?? -1),
-          message: sanitizeMiningTaskMessage(mine.result),
+          exitCode: Number(mine!.exit_code ?? -1),
+          message: sanitizeMiningTaskMessage(mine!.result),
         };
       }
     } catch (error) {
