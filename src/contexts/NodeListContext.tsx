@@ -35,6 +35,10 @@ export type NodeBasicInfo = {
   /** 价格 */
   price: number;
   tags: string;
+  /** 探针启动时带了矿工 API 地址。停挖后仍在，不代表此刻有算力。 */
+  miner_configured?: boolean;
+  /** 探针启动时带了可执行的启停模板，且没关远程执行。 */
+  miner_controllable?: boolean;
   /** 账单周期（天）*/
   billing_cycle: number;
   /** 货币 */
@@ -128,6 +132,8 @@ export const NodeListProvider: React.FC<{ children: React.ReactNode }> = ({
           weight: n.weight ?? 0,
           price: n.price ?? 0,
           tags: n.tags ?? "",
+          miner_configured: Boolean(n.miner_configured),
+          miner_controllable: Boolean(n.miner_controllable),
           billing_cycle: n.billing_cycle ?? 0,
           currency: n.currency ?? "",
           group: n.group ?? "",

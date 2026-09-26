@@ -39,6 +39,46 @@ export type MiningTaskRpcCall = (
   params: { task_id: string },
 ) => Promise<MiningTaskResult[] | null | undefined>;
 
+export type MinerIdentity = {
+  tags?: string;
+  miner_configured?: boolean;
+  miner_controllable?: boolean;
+};
+
+function hasMinerTag(tags?: string): boolean {
+  const text = tags?.toLowerCase() ?? "";
+  return text.includes("miner") || text.includes("mining");
+}
+
+/** 矿机身份：启动参数优先，实时算力 / 24h 曲线 / 手工标签给未升级探针兜底。 */
+export function isConfiguredMiner(
+  info: MinerIdentity,
+  hasLiveMining: boolean,
+  hasHistoryMetrics: boolean,
+): boolean {
+  return Boolean(
+    info.miner_configured ||
+      info.miner_controllable ||
+      hasLiveMining ||
+      hasHistoryMetrics ||
+      hasMinerTag(info.tags),
+  );
+}
+
+/**
+ * 老探针不报 miner_controllable，缺省 false 不能把正在挖或打过标签的矿机按钮藏掉。
+ * 只有新探针明确「配过矿、但不能控」时才换成不可远程启停。
+ */
+export function showsMiningControls(
+  info: MinerIdentity,
+  hasLiveMining: boolean,
+  hasHistoryMetrics: boolean,
+): boolean {
+  if (info.miner_controllable) return true;
+  if (info.miner_configured) return false;
+  return hasLiveMining || hasHistoryMetrics || hasMinerTag(info.tags);
+}
+
 export function includesClient(list: string[] | undefined, uuid: string): boolean {
   return Array.isArray(list) && list.includes(uuid);
 }

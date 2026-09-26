@@ -34,7 +34,9 @@ import { cn } from "@/lib/utils";
 import { formatHashrate } from "@/utils/miningHelper";
 import {
   interpretMiningControlResp,
+  isConfiguredMiner,
   pollMiningTaskResult,
+  showsMiningControls,
   type MiningControlResp,
 } from "@/utils/miningControl";
 
@@ -365,13 +367,7 @@ export default function Mining() {
     return nodes
       .filter((info) => {
         const st = status[info.uuid];
-        const tags = info.tags?.toLowerCase() ?? "";
-        return (
-          st?.mining != null ||
-          (history[info.uuid]?.length ?? 0) > 0 ||
-          tags.includes("miner") ||
-          tags.includes("mining")
-        );
+        return isConfiguredMiner(info, st?.mining != null, (history[info.uuid]?.length ?? 0) > 0);
       })
       .map((info) => info.uuid);
   }, [nodeList]);
@@ -593,14 +589,11 @@ export default function Mining() {
     isMiner: boolean;
   }> = nodes.map((info) => {
     const st = latest[info.uuid];
-    const hasLiveMining = st?.mining != null;
-    const hasHistoryMetrics = (historyMetrics[info.uuid]?.length ?? 0) > 0;
-    const hasMinerTag =
-      Boolean(info.tags?.toLowerCase().includes("miner")) ||
-      Boolean(info.tags?.toLowerCase().includes("mining"));
-
-    // 判别是否为挖矿节点（具有挖矿能力/配置）
-    const isMiner = hasLiveMining || hasHistoryMetrics || hasMinerTag;
+    const isMiner = isConfiguredMiner(
+      info,
+      st?.mining != null,
+      (historyMetrics[info.uuid]?.length ?? 0) > 0,
+    );
 
     return {
       info,
@@ -698,6 +691,11 @@ export default function Mining() {
                 const isOnline = m.online;
                 const isMiner = m.isMiner;
                 const points = historyMetrics[m.info.uuid];
+                const canControl = showsMiningControls(
+                  m.info,
+                  m.mining != null,
+                  (points?.length ?? 0) > 0,
+                );
 
                 return (
                   <TableRow key={m.info.uuid}>
@@ -774,7 +772,7 @@ export default function Mining() {
 
                     {/* 操作管控 */}
                     <TableCell>
-                      {isMiner ? (
+                      {canControl ? (
                         <Flex gap="2" align="center" wrap="wrap">
                           <Button
                             size="1"
@@ -836,6 +834,13 @@ export default function Mining() {
                             </Text>
                           )}
                         </Flex>
+                      ) : isMiner ? (
+                        <Badge variant="surface" color="amber" size="1">
+                          {t(
+                            "admin.mining.configuredNoControl",
+                            "已配置，不可远程启停",
+                          )}
+                        </Badge>
                       ) : (
                         <Badge variant="surface" color="gray" size="1">
                           {t("admin.mining.notConfigured", "未配置挖矿")}

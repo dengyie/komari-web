@@ -73,7 +73,8 @@
       "subtitle": "集中监控集群节点算力与算法状态，通过任务链路远程下发矿机启停指令",
       "success": "指令已执行",
       "title": "挖矿管理",
-      "trend": "算力趋势 (24h)"
+      "trend": "算力趋势 (24h)",
+      "configuredNoControl": "已配置，不可远程启停"
     },
     "nodeDetail": {
       "arch": "架构",

@@ -188,7 +188,8 @@
       "subtitle": "集中監控集群節點算力與算法狀態，透過任務鏈路遠端下發礦機啟停指令",
       "success": "指令已執行",
       "title": "挖礦管理",
-      "trend": "算力趨勢 (24h)"
+      "trend": "算力趨勢 (24h)",
+      "configuredNoControl": "已配置，不可遠端啟停"
     }
   },
   "chart": {

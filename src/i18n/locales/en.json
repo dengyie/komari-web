@@ -188,7 +188,8 @@
       "subtitle": "Monitor node hashrates and algorithms, remotely dispatch start/pause commands",
       "success": "Command executed",
       "title": "Mining Management",
-      "trend": "Hashrate Trend (24h)"
+      "trend": "Hashrate Trend (24h)",
+      "configuredNoControl": "Configured, remote control unavailable"
     }
   },
   "chart": {
@@ -334,7 +335,12 @@
       "column": "Column",
       "loading_agent": "Fetching file from agent...",
       "maximize": "Maximize",
-      "menu": { "edit": "Edit", "file": "File", "terminal": "Terminal", "view": "View" },
+      "menu": {
+        "edit": "Edit",
+        "file": "File",
+        "terminal": "Terminal",
+        "view": "View"
+      },
       "minimap": "Minimap",
       "no_symbols": "No symbols found",
       "outline": "Outline",

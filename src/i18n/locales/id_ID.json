@@ -188,7 +188,8 @@
       "subtitle": "Pantau hashrate dan algoritma node terpusat, kirim perintah mulai/jeda penambang dari jarak jauh",
       "success": "Perintah dieksekusi",
       "title": "Manajemen Penambangan",
-      "trend": "Tren Hashrate (24j)"
+      "trend": "Tren Hashrate (24j)",
+      "configuredNoControl": "Terkonfigurasi, tidak bisa dikontrol jarak jauh"
     }
   },
   "chart": {
